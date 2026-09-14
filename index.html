@@ -1,35 +1,397 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>In Development! </title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html, body {
-      height: 100%;
-      background-color: #000;
-    }
-    body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    h1 {
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-weight: 500;
-      font-size: clamp(1.5rem, 5vw, 3rem);
-      letter-spacing: 0.05em;
-      text-align: center;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab 3D printer — live</title>
+<meta name="description" content="Live camera on the lab 3D printer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --plate:#E7E8E2;
+    --paper:#F4F5F0;
+    --graphite:#1E201D;
+    --steel:#6C7068;
+    --amber:#D89A00;
+    --screen:#0C0D0B;
+    --line:rgba(30,32,29,.14);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box}
+
+  html,body{height:100%}
+
+  body{
+    background-color:var(--plate);
+    /* layer lines, 0.2 mm scaled up */
+    background-image:repeating-linear-gradient(
+      to bottom,
+      rgba(30,32,29,.05) 0 1px,
+      transparent 1px 9px
+    );
+    color:var(--graphite);
+    font-family:"Archivo",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{color:inherit}
+
+  :focus-visible{
+    outline:2px solid var(--amber);
+    outline-offset:2px;
+    border-radius:2px;
+  }
+
+  .page{
+    height:100%;
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr) auto;
+    gap:14px;
+    padding:18px clamp(14px,3vw,28px) 16px;
+    max-width:1680px;
+    margin:0 auto;
+  }
+
+  /* ---------- header ---------- */
+
+  .bar{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--line);
+  }
+
+  h1{
+    font-size:clamp(1.15rem,2.4vw,1.6rem);
+    font-weight:700;
+    letter-spacing:-.018em;
+  }
+
+  .sub{
+    color:var(--steel);
+    font-size:.85rem;
+    margin-top:1px;
+  }
+
+  .status{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    font-size:.86rem;
+    font-weight:500;
+    color:var(--steel);
+    white-space:nowrap;
+  }
+
+  .dot{
+    width:9px;height:9px;
+    border-radius:50%;
+    background:var(--steel);
+    flex:none;
+  }
+
+  .status[data-state="live"]{color:var(--graphite)}
+  .status[data-state="live"] .dot{
+    background:var(--amber);
+    box-shadow:0 0 0 0 rgba(216,154,0,.55);
+    animation:pulse 2.4s ease-out infinite;
+  }
+  .status[data-state="offline"] .dot{background:#B9BCB4}
+
+  @keyframes pulse{
+    70%{box-shadow:0 0 0 7px rgba(216,154,0,0)}
+    100%{box-shadow:0 0 0 0 rgba(216,154,0,0)}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .status[data-state="live"] .dot{animation:none}
+  }
+
+  /* ---------- stage ---------- */
+
+  .stage{
+    min-height:0;
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:14px;
+  }
+
+  .stage.with-chat{grid-template-columns:minmax(0,1fr) 330px}
+
+  .screen,.chat{
+    background:var(--screen);
+    border-radius:3px;
+    overflow:hidden;
+    min-height:0;
+    position:relative;
+  }
+
+  .screen iframe,.chat iframe{
+    display:block;
+    width:100%;
+    height:100%;
+    border:0;
+  }
+
+  .chat{display:none}
+  .stage.with-chat .chat{display:block}
+
+  /* setup / fallback message inside the screen */
+  .notice{
+    position:absolute;
+    inset:0;
+    display:grid;
+    align-content:center;
+    justify-items:start;
+    gap:10px;
+    padding:clamp(22px,5vw,48px);
+    color:#D7D9D2;
+    max-width:62ch;
+  }
+  .notice h2{
+    font-size:1.05rem;
+    font-weight:600;
+    color:#fff;
+  }
+  .notice p{font-size:.9rem;line-height:1.65;color:#A8ABA3}
+  .notice code{
+    font-family:"Archivo",sans-serif;
+    color:var(--amber);
+    font-weight:600;
+  }
+
+  /* ---------- footer ---------- */
+
+  .foot{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+    padding-top:12px;
+    border-top:1px solid var(--line);
+    color:var(--steel);
+    font-size:.84rem;
+  }
+
+  .actions{display:flex;align-items:center;gap:8px}
+
+  .btn{
+    font:inherit;
+    font-size:.84rem;
+    font-weight:500;
+    color:var(--graphite);
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:6px 11px;
+    cursor:pointer;
+    text-decoration:none;
+    display:inline-block;
+  }
+  .btn:hover{background:#fff}
+  .btn[aria-pressed="true"]{
+    background:var(--graphite);
+    border-color:var(--graphite);
+    color:var(--paper);
+  }
+
+  /* ---------- narrow ---------- */
+
+  @media (max-width:880px){
+    body{height:auto}
+    .page{height:auto;min-height:100%;grid-template-rows:auto auto auto}
+    .stage,.stage.with-chat{grid-template-columns:minmax(0,1fr)}
+    .screen{aspect-ratio:16/9}
+    .stage.with-chat .chat{height:58vh}
+  }
+</style>
 </head>
 <body>
-  <h1>In Development! </h1>
+
+<div class="page">
+
+  <header class="bar">
+    <div>
+      <h1 id="title">Lab 3D printer</h1>
+      <p class="sub" id="subtitle">Camera on the print bed, streaming from a Raspberry Pi.</p>
+    </div>
+    <p class="status" id="status" data-state="loading" role="status">
+      <span class="dot"></span><span id="statusText">Connecting</span>
+    </p>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="screen" id="screen"></div>
+    <div class="chat" id="chat"></div>
+  </main>
+
+  <footer class="foot">
+    <p id="note">Audio is off — this is a picture-only view of the printer.</p>
+    <div class="actions">
+      <button class="btn" id="chatToggle" aria-pressed="false">Show chat</button>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+
+const CONFIG = {
+  channel:  "creatrlab",      // your Twitch username, lowercase, no URL
+  printer:  "Lab 3D printer",           // shown as the page heading
+  blurb:    "Camera on the print bed, streaming from a Raspberry Pi.",
+  showChat: false                       // true = chat panel open on load
+};
+
+const el = {
+  stage:   document.getElementById("stage"),
+  screen:  document.getElementById("screen"),
+  chat:    document.getElementById("chat"),
+  status:  document.getElementById("status"),
+  text:    document.getElementById("statusText"),
+  toggle:  document.getElementById("chatToggle"),
+  note:    document.getElementById("note")
+};
+
+const channel = CONFIG.channel.trim().toLowerCase();
+const parent  = location.hostname;
+const ready   = channel && channel !== "your_twitch_channel";
+
+document.title = CONFIG.printer + " — live";
+document.getElementById("title").textContent = CONFIG.printer;
+document.getElementById("subtitle").textContent = CONFIG.blurb;
+
+function setStatus(state, text){
+  el.status.dataset.state = state;
+  el.text.textContent = text;
+}
+
+function notice(heading, body){
+  el.screen.innerHTML =
+    '<div class="notice"><h2></h2><p></p></div>';
+  el.screen.querySelector("h2").textContent = heading;
+  el.screen.querySelector("p").innerHTML = body;
+}
+
+/* ---- guard rails ------------------------------------------------ */
+
+if (!ready){
+  setStatus("offline", "Not set up yet");
+  notice(
+    "Add your Twitch channel",
+    'Open this file and set <code>channel</code> in the CONFIG block near the bottom to the ' +
+    "Twitch username the Raspberry Pi streams to. Save, push, and the player appears here."
+  );
+  el.toggle.disabled = true;
+} else if (!parent){
+  setStatus("offline", "Needs a web server");
+  notice(
+    "Open this page over http",
+    "Twitch blocks embeds loaded from a local file. Push it to GitHub Pages, or run " +
+    "<code>python3 -m http.server</code> in this folder and visit localhost."
+  );
+  el.toggle.disabled = true;
+} else {
+  start();
+}
+
+/* ---- player ----------------------------------------------------- */
+
+function start(){
+  setStatus("loading", "Connecting");
+
+  const sdk = document.createElement("script");
+  sdk.src = "https://embed.twitch.tv/embed/v1.js";
+  sdk.onload  = embedWithSdk;
+  sdk.onerror = embedWithIframe;
+  document.head.appendChild(sdk);
+}
+
+// Preferred path: the Twitch embed SDK reports real online/offline events.
+function embedWithSdk(){
+  if (!window.Twitch || !window.Twitch.Embed) return embedWithIframe();
+
+  const embed = new Twitch.Embed("screen", {
+    channel: channel,
+    layout: "video",
+    theme: "dark",
+    muted: true,
+    autoplay: true,
+    width: "100%",
+    height: "100%"
+  });
+
+  embed.addEventListener(Twitch.Embed.VIDEO_READY, function(){
+    const player = embed.getPlayer();
+
+    // Keep it silent: mute now, and re-mute if anyone unmutes in the player UI.
+    const forceMute = function(){
+      try {
+        if (!player.getMuted()) player.setMuted(true);
+        if (player.getVolume() !== 0) player.setVolume(0);
+      } catch (e) { /* player not ready yet */ }
+    };
+    forceMute();
+    player.addEventListener(Twitch.Player.PLAY,    forceMute);
+    player.addEventListener(Twitch.Player.PLAYING, forceMute);
+    setInterval(forceMute, 1000);
+
+    player.addEventListener(Twitch.Player.ONLINE,  () => setStatus("live", "Stream live"));
+    player.addEventListener(Twitch.Player.OFFLINE, () => setStatus("offline", "Stream offline"));
+    player.addEventListener(Twitch.Player.ENDED,   () => setStatus("offline", "Stream ended"));
+    setStatus(player.getEnded() ? "offline" : "live",
+              player.getEnded() ? "Stream offline" : "Stream live");
+  });
+}
+
+// Fallback if the SDK is blocked: plain iframe, no status events.
+function embedWithIframe(){
+  const src = "https://player.twitch.tv/?channel=" + encodeURIComponent(channel) +
+              "&parent=" + encodeURIComponent(parent) +
+              "&muted=true&autoplay=true";
+  el.screen.innerHTML = "";
+  const frame = document.createElement("iframe");
+  frame.src = src;
+  frame.title = CONFIG.printer + " live stream";
+  frame.allow = "autoplay; fullscreen";
+  frame.allowFullscreen = true;
+  el.screen.appendChild(frame);
+  setStatus("loading", "Status shown in player");
+}
+
+/* ---- chat ------------------------------------------------------- */
+
+let chatLoaded = false;
+
+function setChat(open){
+  el.stage.classList.toggle("with-chat", open);
+  el.toggle.setAttribute("aria-pressed", String(open));
+  el.toggle.textContent = open ? "Hide chat" : "Show chat";
+
+  if (open && !chatLoaded){
+    const frame = document.createElement("iframe");
+    frame.src = "https://www.twitch.tv/embed/" + encodeURIComponent(channel) +
+                "/chat?darkpopout&parent=" + encodeURIComponent(parent);
+    frame.title = "Twitch chat";
+    el.chat.appendChild(frame);
+    chatLoaded = true;
+  }
+}
+
+el.toggle.addEventListener("click", function(){
+  setChat(el.toggle.getAttribute("aria-pressed") !== "true");
+});
+
+if (ready && parent && CONFIG.showChat) setChat(true);
+</script>
+
 </body>
 </html>
